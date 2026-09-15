@@ -1,0 +1,43 @@
+{
+  "name": "link-risk-gateway",
+  "version": "0.1.0",
+  "description": "Policy gateway that enforces a user-configurable risk profile on Claude's Stripe Link agent-wallet spend requests",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "link-risk-gateway": "dist/bin/gateway.js",
+    "link-risk-ledger": "dist/bin/ledger.js",
+    "link-risk-editor": "dist/bin/editor.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && vite build --config editor/vite.config.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p editor/tsconfig.json",
+    "test": "vitest run",
+    "gateway": "tsx src/bin/gateway.ts",
+    "ledger": "tsx src/bin/ledger.ts",
+    "editor": "node dist/bin/editor.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@stripe/link-cli": "0.19.1",
+    "better-sqlite3": "13.0.3",
+    "yaml": "2.9.1",
+    "zod": "4.6.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.5.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.6",
+    "vitest": "^3.2.7"
+  }
+}
