@@ -1,0 +1,61 @@
+# Link Risk Gateway profile. Amounts are USD cents. Caps may be stricter than
+# Stripe's agent-wallet limits ($500/txn, $500/day), never looser.
+# Easiest way to edit: npm run editor
+version: 1
+default_project: personal
+
+# Requests that pass every check but use >= this % of any limit are forwarded
+# with gateway_risk_flag=true and a warning to Claude.
+flag_threshold_pct: 80
+
+# IANA time zone for quiet hours.
+timezone: America/Chicago
+
+# Merchant domain -> category. Overrides whatever category Claude declares.
+# Subdomains match (shop.example.com matches example.com).
+merchant_categories:
+  draftkings.com: gambling
+  fanduel.com: gambling
+  netflix.com: subscription
+  spotify.com: subscription
+  amazon.com: retail
+  rei.com: outdoor-gear
+  bikepacking.com: outdoor-gear
+
+projects:
+  personal:
+    preset: safe                      # old-man-coffee | safe | strategic | all-in | custom
+    per_transaction_cap_cents: 5000
+    daily_cap_cents: 15000            # rolling 24h
+    recent_purchases_cap:             # no more than $400 in any rolling 7 days
+      window_days: 7
+      window_hours: 0
+      max_total_cents: 40000
+    blocked_categories: [gambling, gift-cards, crypto, uncategorized]
+    blocked_merchants: []             # domains, subdomains included
+    quiet_hours:                      # no purchases 11pm-7am; wraps midnight
+      start: "23:00"
+      end: "07:00"
+    velocity:
+      window_minutes: 15
+      max_requests: 3
+      max_amount_cents_in_window: 10000
+      small_txn_threshold_cents: 500  # card-testing pattern: many tiny charges
+      max_small_txns_in_window: 3
+
+  gravel-research:
+    preset: strategic
+    per_transaction_cap_cents: 20000
+    daily_cap_cents: 40000
+    recent_purchases_cap:
+      window_days: 7
+      window_hours: 0
+      max_total_cents: 150000
+    blocked_categories: [gambling, gift-cards]
+    blocked_merchants: []
+    velocity:
+      window_minutes: 15
+      max_requests: 5
+      max_amount_cents_in_window: 40000
+      small_txn_threshold_cents: 500
+      max_small_txns_in_window: 5

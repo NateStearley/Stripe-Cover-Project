@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(link-cli:*)",
+      "Bash(npx link-cli:*)",
+      "Bash(npx @stripe/link-cli:*)",
+      "Bash(npx -y @stripe/link-cli:*)",
+      "Bash(npx --yes @stripe/link-cli:*)",
+      "Bash(npm exec @stripe/link-cli:*)",
+      "Bash(*node_modules/.bin/link-cli*)",
+      "Bash(*@stripe/link-cli/dist/cli.js*)",
+      "Edit(~/.link-risk-gateway/**)",
+      "Write(~/.link-risk-gateway/**)",
+      "Bash(*.link-risk-gateway*)",
+      "Bash(*bin/editor.js*)",
+      "Bash(npm run editor*)"
+    ]
+  },
+  "skillOverrides": {
+    "link-cli": "off",
+    "create-payment-credential": "off",
+    "financial-insights": "off"
+  }
+}
