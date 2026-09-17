@@ -1,11 +1,12 @@
 # Custom Risk Profiles for Agent Transactions
 
-Custom risk tolerance settings for [Stripe Link's agent wallet](https://github.com/stripe/link-cli). Every
-spend request Claude makes is checked against a risk profile you write, per project, **before** it reaches
-Stripe. Stripe's own approval step is never bypassed. Anything to [make sure Claude doens't order 4,000 pounds of meat](https://youtu.be/m0b_D2JgZgY?t=74).
+This project allows the user to define custom risk tolerance settings for [Stripe Link's agent wallet](https://github.com/stripe/link-cli). 
+Every spend request that Claude would traditionally send right to Stripe Link is instead checked against 
+a risk profile you define **before** it reaches Stripe. However, Stripe's own approval step is never bypassed. 
+It's just one extra step to [make sure Claude doens't order 4,000 pounds of meat](https://youtu.be/m0b_D2JgZgY?t=74).
 
-Stripe's only built-in guardrails are global and fixed ($500/transaction, $500/day, $20k/30 days). Your own
-settings add:
+Stripe's built-in guardrails are fixed ($500/transaction, $500/day, $20k/30 days). But, with a custom risk profile, 
+you can add:
 
 - per-project caps
 - category blocks
@@ -14,9 +15,9 @@ settings add:
 
 ## Setup
 
-This project supports Claude Code only. It needs Node 20 or newer.
+This project is built for Claude Code and requires Node 20 or newer.
 
-Clone the repo and move into it. Every command below is run from the project root.
+Clone the repo and `cd` into it.
 
 ```bash
 git clone https://github.com/NateStearley/Stripe-Cover-Project.git
@@ -113,7 +114,7 @@ In order of precedence:
 ## Editing the risk profile
 
 ```bash
-npm run editor                # run in your own terminal, not through Claude
+npm run editor
 ```
 
 The editor runs on 127.0.0.1:4319, and the link it opens includes a one-time access token. The link is printed
@@ -164,35 +165,6 @@ Top-level settings:
   Claude is told to mention it to you.
 - `timezone`: an IANA time zone such as `America/Chicago`. Required if any project uses quiet hours.
 
-How the profile is loaded:
-
-- It's validated strictly. Unknown keys are rejected, and so are caps looser than Stripe's own limits.
-- It's re-read on every request, so edits apply immediately.
-- If it becomes invalid, **all spending is denied** until you fix it.
-
-## Decision rules
-
-| Check               | Deny when                                                                 | Counts                             |
-| ------------------- | ------------------------------------------------------------------------- | ---------------------------------- |
-| Per-transaction cap | amount > cap                                                              | —                                  |
-| Category            | resolved category is blocked                                              | —                                  |
-| Merchant            | merchant domain (or a parent domain) is blocked                           | —                                  |
-| Quiet hours         | current time in `timezone` is within `[start, end)`                       | —                                  |
-| Daily cap           | committed 24h spend + amount > cap                                        | committed spend only               |
-| Longer-period cap   | committed spend in the last `window_days` + `window_hours` + amount > cap | committed spend only               |
-| Request count       | attempts in window (incl. this one) > `max_requests`                      | **all** attempts, denials included |
-| Window amount       | committed window spend + amount > cap                                     | committed spend only               |
-| Small-charge burst  | this is small and small attempts in window > max                          | **all** small attempts             |
-
-"Committed" means the request was allowed or flagged and its Link status is not `denied`, `expired`,
-`canceled`, `failed`, or `forward_failed`.
-
-Denials count toward the attempt-count rules, so a denied burst can't reset itself. They don't count toward
-the amount caps, so one oversized denied attempt can't use up your budget.
-
-The evaluate-and-record step runs under a SQLite `BEGIN IMMEDIATE` lock, so two concurrent requests can't
-both slip under a limit. `risk_score` (0–100) is the highest utilization across all checks.
-
 ## MCP tools
 
 | Tool                             | Notes                                                                                                                                                                |
@@ -220,8 +192,6 @@ node dist/bin/ledger.js [--project personal] [--limit 25] [--json]
 
 ```bash
 npm test            # vitest: policy rules, presets, ledger locking, request flow, CLI args, MCP, editor API and UI logic
-npm run typecheck   # server and editor
-npm run build       # server into dist/, editor UI into dist/editor-ui/
 ```
 
 `src/` layout:
@@ -233,11 +203,3 @@ npm run build       # server into dist/, editor UI into dist/editor-ui/
 - `gateway/`: orchestration
 - `mcp/`: tool definitions
 - `bin/`: entry points
-
-## Roadmap
-
-- **Next:** an end-to-end demo with Claude in Stripe test mode. A request that breaks a rule is denied
-  instantly; a valid one is forwarded, approved in the Link app, and its credential issued.
-- **Stretch:** EWMA-based adaptive velocity thresholds, and richer ledger reporting.
-- **Out of scope for v1:** multi-user or hosted OAuth, a web profile editor, real-money transactions, and
-  shared payment token / Link Pay Token flows.
