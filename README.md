@@ -1,54 +1,95 @@
-# Link Risk Gateway
+# Custom Risk Profiles for Agent Transactions
 
-A policy gateway between Claude and [Stripe Link's agent wallet](https://github.com/stripe/link-cli). It checks
-every spend request against a risk profile you write, per project, **before** it reaches Stripe. Stripe's own
-approval step is never bypassed.
+Custom risk tolerance settings for [Stripe Link's agent wallet](https://github.com/stripe/link-cli). Every
+spend request Claude makes is checked against a risk profile you write, per project, **before** it reaches
+Stripe. Stripe's own approval step is never bypassed. Anything to [make sure Claude doens't order 4,000 pounds of meat](https://youtu.be/m0b_D2JgZgY?t=74).
 
-Stripe's only built-in guardrails are global and fixed ($500/transaction, $500/day, $20k/30 days). The
-gateway adds:
+Stripe's only built-in guardrails are global and fixed ($500/transaction, $500/day, $20k/30 days). Your own
+settings add:
 
 - per-project caps
 - category blocks
 - rolling window lookback and custom cap
 - a local audit ledger
 
-```
-Claude ──MCP──▶ Risk Gateway ──deny──▶ back to Claude (never reaches Stripe)
-                  │  policy engine + SQLite ledger
-                  └──allow / flag──▶ link-cli (test mode) ──▶ Stripe Link ──▶ your approval in the Link app
-```
-
 ## Setup
 
-This project supports Claude Code only.
+This project supports Claude Code only. It needs Node 20 or newer.
+
+Clone the repo and move into it. Every command below is run from the project root.
 
 ```bash
-LINK_CLI_SKIP_SKILL_INSTALL=1 npm install   # see "Keep Claude off the direct Link path" below
-npm run build
-npx link-cli auth login                     # run in your own terminal; connects your Link account
-mkdir -p ~/.link-risk-gateway
-cp examples/risk-profile.yaml ~/.link-risk-gateway/risk-profile.yaml
-claude mcp add link-risk-gateway -- node "$PWD/dist/bin/gateway.js"
+git clone https://github.com/NateStearley/Stripe-Cover-Project.git
+cd Stripe-Cover-Project
 ```
 
-Then work through the next section before your first Claude session. The gateway only protects you if it is
-the **only** way Claude can reach Link.
+Install dependencies. The environment variable stops the script from installing Stripe's Link skills, 
+which would give Claude a way to run link-cli directly, cirsumventing the custom risk profiles. See "Keep
+Claude off the direct Link path" below.
+
+```bash
+LINK_CLI_SKIP_SKILL_INSTALL=1 npm install
+```
+
+This also builds the project, so there's no separate build step.
+
+Give yourself a starting risk profile and put the `spend_request_*` tools in front of Claude. This copies the
+example profile to `~/.link-risk-gateway/risk-profile.yaml` and registers the risk checks with Claude Code as
+an MCP server, which should be the only route Claude has to Link. Re-running it is safe: it never overwrites a
+profile you've edited.
+
+```bash
+npm run setup
+```
+
+Connect your Link account.
+
+```bash
+npx link-cli auth login
+```
+
+Then work through the next section before your first Claude session. Your risk settings only protect you if
+they are the **only** way Claude can reach Link.
 
 ## Keep Claude off the direct Link path
 
 link-cli keeps its login credentials on disk. Anything on your machine that can run link-cli can create spend
-requests without the gateway, so without risk checks and without the gateway's forced `--test` flag. Stripe
-ships several ready-made ways to give Claude that direct access. Close every one:
+requests without checking the user's custom risk settings. Stripe ships several ready-made ways to 
+give Claude that direct access. To use this project, close every one:
 
-| Direct path                                                                                                                         | How to close it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | How to check                                                                                       |
-| ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| **Stripe's Link skills** (`link-cli`, `create-payment-credential`, `financial-insights`). These tell Claude to run link-cli itself. | **`npm install` of `@stripe/link-cli` installs them globally without asking**: its `postinstall` script runs `npx skills add stripe/link-cli -g -y`. Always install with `LINK_CLI_SKIP_SKILL_INSTALL=1`. If they're already installed, turn them off with `skillOverrides` (in `examples/claude-settings.json`), or delete them: `rm ~/.claude/skills/{link-cli,create-payment-credential,financial-insights}` and `rm -r ~/.agents/skills/{link-cli,create-payment-credential,financial-insights}`. | `ls ~/.claude/skills .claude/skills`                                                               |
-| **Stripe's Claude Code plugin** (the link-cli repo ships a `.claude-plugin`)                                                        | Don't install it. If you did, uninstall it from `/plugin`.                                                                                                                                                                                                                                                                                                                                                                                                                                            | `/plugin`                                                                                          |
-| **link-cli's own MCP server** (`link-cli --mcp`)                                                                                    | Don't register it. Remove any existing entry with `claude mcp remove <name>`. Also check for a project `.mcp.json`.                                                                                                                                                                                                                                                                                                                                                                                   | `claude mcp list` should show `link-risk-gateway` and no other server that runs `@stripe/link-cli` |
-| **link-cli's HTTP server** (`link-cli serve`, on 127.0.0.1:54321)                                                                   | Don't run it. It exposes your wallet to any local process.                                                                                                                                                                                                                                                                                                                                                                                                                                            | `lsof -i :54321` returns nothing                                                                   |
-| **Claude running link-cli in its shell**                                                                                            | Merge the `permissions.deny` rules from `examples/claude-settings.json` into `~/.claude/settings.json`. They cover `link-cli`, `npx link-cli`, `npx [-y\|--yes] @stripe/link-cli`, `npm exec`, and calls by file path.                                                                                                                                                                                                                                                                                | Ask Claude to run `npx link-cli --version`. It should be refused.                                  |
-| **Link tokens in the environment** (`LINK_ACCESS_TOKEN`, `LINK_REFRESH_TOKEN`)                                                      | Don't set them in your shell profile or in the `env` block of Claude Code settings. Log in with `link-cli auth login` instead.                                                                                                                                                                                                                                                                                                                                                                        | `env \| grep LINK_`                                                                                |
-| **Claude loosening its own risk profile**, by editing the YAML file or starting the editor to read its access link                  | The `Edit`, `Write` and `Bash` deny rules for `~/.link-risk-gateway` and the editor in `examples/claude-settings.json`. Run `npm run editor` yourself, in a normal terminal. Its access link is printed only there. If your profile lives somewhere else (`--profile` / `LINK_RISK_PROFILE`), change those rules to that path.                                                                                                                                                                        | Ask Claude to add a line to `~/.link-risk-gateway/risk-profile.yaml`. It should be refused.        |
+### Stripe's Link skills
+
+`npm install` of `@stripe/link-cli` runs a `postinstall` script that installs three skills 
+globally: `link-cli`, `create-payment-credential` and `financial-insights`. 
+They land in `~/.claude/skills` and `~/.agents/skills`, and they tell Claude to run
+link-cli itself. We have to blocks Claude's useage 
+
+Close it in two parts:
+
+1. **Remove the skills.** Install with `LINK_CLI_SKIP_SKILL_INSTALL=1` (the `postinstall` script honors it, and
+   also skips under `CI`). If they're already installed, turn them off with `skillOverrides` (in
+   `examples/claude-settings.json`), or delete them:
+
+   ```bash
+   rm -r ~/.claude/skills/{link-cli,create-payment-credential,financial-insights}
+   rm -r ~/.agents/skills/{link-cli,create-payment-credential,financial-insights}
+   ```
+
+2. **Block the command.** The skills are only instructions; the deny rules are what stop the command from
+   running. Merge the `permissions.deny` rules from `examples/claude-settings.json` into
+   `~/.claude/settings.json`. They cover `link-cli`, `npx link-cli`, `npx [-y|--yes] @stripe/link-cli`,
+   `npm exec`, and calls by file path.
+
+To check: `ls ~/.claude/skills ~/.agents/skills` lists none of the three, and asking Claude to run
+`npx link-cli --version` is refused.
+
+<!-- ### Other direct paths
+
+Each of these needs a deliberate action, so the fix is simply not to take it: don't install Stripe's Claude
+Code plugin (the link-cli repo ships a `.claude-plugin`), don't register link-cli's own MCP server
+(`link-cli --mcp`), don't run its HTTP server (`link-cli serve` on 127.0.0.1:54321, which exposes your wallet
+to any local process), and don't put `LINK_ACCESS_TOKEN` or `LINK_REFRESH_TOKEN` in your shell profile or in
+the `env` block of Claude Code settings — log in with `link-cli auth login` instead.
 
 Two things about these protections:
 
@@ -58,8 +99,8 @@ Two things about these protections:
 - **The deny rules also block your own `!` commands inside Claude Code.** Run `link-cli auth login` and any
   manual link-cli commands in a normal terminal.
 
-The gateway itself is unaffected by the deny rules: it runs link-cli as its own subprocess, not through
-Claude's shell.
+The risk checks themselves are unaffected by the deny rules: they run link-cli as their own subprocess, not
+through Claude's shell. -->
 
 ## Configuration
 
@@ -74,9 +115,6 @@ In order of precedence:
 ```bash
 npm run editor                # run in your own terminal, not through Claude
 ```
-
-This opens the editor in your browser. **Close the tab when you're done**: the command exits on its own and
-tells you whether anything was saved. You don't need to press Ctrl+C.
 
 The editor runs on 127.0.0.1:4319, and the link it opens includes a one-time access token. The link is printed
 in the terminal only if your browser can't be opened, or the editor hasn't loaded after 30 seconds. Other
@@ -97,14 +135,6 @@ For each project, choose a preset, then adjust any setting:
 
 Changing any setting switches the project to **Custom**. Presets never touch your blocked-merchants list.
 
-How saving works:
-
-- The editor checks every value with the gateway's own schema before saving, and highlights any field that
-  needs fixing.
-- It writes the file in one step (write-then-rename), so the gateway never reads a half-written profile.
-- It refuses to overwrite the file if someone else changed it after you opened the editor.
-- It rewrites the YAML file, so any comments you added by hand are lost. Your merchant category map is kept.
-
 The editor's code is in `editor/` (React) and `src/editor/server.ts` (API). Presets live in
 `src/profile/presets.ts`.
 
@@ -114,7 +144,7 @@ See `examples/risk-profile.yaml`. Settings for each project under `projects.<nam
 
 | Setting                     | What it does                                                                                                                                                                          |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `preset`                    | Which editor preset the project came from: `old-man-coffee`, `safe`, `strategic`, `all-in` or `custom`. For display only; the gateway ignores it.                                     |
+| `preset`                    | Which editor preset the project came from: `old-man-coffee`, `safe`, `strategic`, `all-in` or `custom`. For display only; the checks ignore it.                                      |
 | `per_transaction_cap_cents` | Maximum for a single purchase.                                                                                                                                                        |
 | `daily_cap_cents`           | Maximum across a rolling 24 hours.                                                                                                                                                    |
 | `recent_purchases_cap`      | `window_days` (0–90), `window_hours` (0–23) and `max_total_cents`. Spending in that rolling window, plus this purchase, can't exceed the cap. For example, 7 days and $400. Optional. |
@@ -154,7 +184,7 @@ How the profile is loaded:
 | Window amount       | committed window spend + amount > cap                                     | committed spend only               |
 | Small-charge burst  | this is small and small attempts in window > max                          | **all** small attempts             |
 
-"Committed" means the gateway allowed or flagged the request and its Link status is not `denied`, `expired`,
+"Committed" means the request was allowed or flagged and its Link status is not `denied`, `expired`,
 `canceled`, `failed`, or `forward_failed`.
 
 Denials count toward the attempt-count rules, so a denied burst can't reset itself. They don't count toward
@@ -173,7 +203,7 @@ both slip under a limit. `risk_score` (0–100) is the highest utilization acros
 | `spend_request_cancel`           |                                                                                                                                                                      |
 | `payment_methods_list`           | Read-only passthrough.                                                                                                                                               |
 
-Every follow-up tool refuses spend request IDs that weren't created through the gateway. link-cli's `update`
+Every follow-up tool refuses spend request IDs that weren't created through these tools. link-cli's `update`
 command (which could change the merchant after the policy check) isn't exposed, and neither is its
 `--approve` flag (delegated self-approval).
 
@@ -189,9 +219,9 @@ node dist/bin/ledger.js [--project personal] [--limit 25] [--json]
 ## Development
 
 ```bash
-npm test            # vitest: policy rules, presets, ledger locking, gateway flow, CLI args, MCP, editor API and UI logic
-npm run typecheck   # gateway and editor
-npm run build       # gateway into dist/, editor UI into dist/editor-ui/
+npm test            # vitest: policy rules, presets, ledger locking, request flow, CLI args, MCP, editor API and UI logic
+npm run typecheck   # server and editor
+npm run build       # server into dist/, editor UI into dist/editor-ui/
 ```
 
 `src/` layout:

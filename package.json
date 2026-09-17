@@ -11,6 +11,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && vite build --config editor/vite.config.ts",
+    "prepare": "npm run build",
+    "setup": "node scripts/setup.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p editor/tsconfig.json",
     "test": "vitest run",
     "gateway": "tsx src/bin/gateway.ts",
