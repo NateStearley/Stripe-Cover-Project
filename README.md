@@ -165,23 +165,6 @@ Top-level settings:
   Claude is told to mention it to you.
 - `timezone`: an IANA time zone such as `America/Chicago`. Required if any project uses quiet hours.
 
-## MCP tools
-
-| Tool                             | Notes                                                                                                                                                                |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `spend_request_create`           | link-cli create arguments plus `project` and `category`. Card credentials only. Always runs with `--test --no-request-approval`.                                     |
-| `spend_request_request_approval` | Returns the `approval_url` to show the user.                                                                                                                         |
-| `spend_request_retrieve`         | `wait_seconds` (≤600) polls for your decision. `include_card` writes the card to a 0600 file in the credentials directory; the full number is never returned inline. |
-| `spend_request_cancel`           |                                                                                                                                                                      |
-| `payment_methods_list`           | Read-only passthrough.                                                                                                                                               |
-
-Every follow-up tool refuses spend request IDs that weren't created through these tools. link-cli's `update`
-command (which could change the merchant after the policy check) isn't exposed, and neither is its
-`--approve` flag (delegated self-approval).
-
-Each forwarded request carries `gateway_attempt_id`, `gateway_project`, `gateway_decision`,
-`gateway_risk_score`, `gateway_policy_version` and `gateway_category` as Stripe metadata.
-
 ## Audit trail
 
 ```bash
